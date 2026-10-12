@@ -1,0 +1,166 @@
+
+// Generate a TypeScript Prisma Client for our Express backend.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Tell Prisma that we are using PostgreSQL.
+// Connection URLs are configured in prisma.config.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// Product categories such as Refrigerators, Furniture and Beddings.
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  isActive    Boolean   @default(true)
+
+  // A category can contain many products.
+  products    Product[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Products displayed on the storefront and managed in the admin dashboard.
+model Product {
+  id             String    @id @default(uuid())
+  name           String
+  slug           String    @unique
+  sku            String    @unique
+  description    String?
+
+  // Use Decimal for prices to avoid floating-point rounding errors.
+  price          Decimal   @db.Decimal(12, 2)
+  compareAtPrice Decimal?  @db.Decimal(12, 2)
+
+  // Store image URLs from cloud storage, not the image files themselves.
+  imageUrls      String[]  @default([])
+
+  // Optional product specifications, such as capacity or colour.
+  specifications Json?
+
+  isActive       Boolean   @default(true)
+  isFeatured     Boolean   @default(false)
+
+  // Every product belongs to one category.
+  categoryId     String
+  category       Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // Each product has one inventory record.
+  inventory      Inventory?
+  orderItems     OrderItem[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Helps retrieve active products within a category.
+  @@index([categoryId, isActive])
+  @@index([isActive, isFeatured])
+}
+
+// Tracks stock levels independently from product descriptions and prices.
+model Inventory {
+  id                String   @id @default(uuid())
+  productId         String   @unique
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Physical stock available at the business.
+  quantity          Int      @default(0)
+
+  // Stock temporarily set aside for pending orders.
+  reservedQuantity  Int      @default(0)
+
+  // Alert the admin when stock reaches this level.
+  reorderLevel      Int      @default(2)
+
+  updatedAt         DateTime @updatedAt
+}
+
+// Customer records for orders and future customer accounts.
+model Customer {
+  id          String   @id @default(uuid())
+  firstName   String
+  lastName    String
+  email       String?  @unique
+  phone       String   @unique
+
+  // We can add password hashes and account authentication later.
+  orders      Order[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// One customer can place many orders.
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique
+
+  customerId      String
+  customer        Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  status          OrderStatus @default(PENDING)
+  paymentStatus   PaymentStatus @default(UNPAID)
+
+  subtotal        Decimal     @db.Decimal(12, 2)
+  deliveryFee     Decimal     @default(0) @db.Decimal(12, 2)
+  total            Decimal     @db.Decimal(12, 2)
+  currency         String      @default("UGX")
+
+  // Preserve delivery details even if the customer later changes their profile.
+  deliveryAddress String
+  deliveryArea    String?
+  customerNotes   String?
+
+  items            OrderItem[]
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+}
+
+// A snapshot of each product and its price when an order is placed.
+model OrderItem {
+  id             String   @id @default(uuid())
+
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  quantity       Int
+  unitPrice      Decimal  @db.Decimal(12, 2)
+  productName    String
+
+  createdAt      DateTime @default(now())
+}
+
+// Track order progress.
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  AWAITING_STOCK
+  READY_FOR_DELIVERY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+// Track payment separately from order fulfilment.
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}

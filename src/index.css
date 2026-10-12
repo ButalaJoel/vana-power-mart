@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+	font-family: system-ui, sans-serif;
+	color: #173b2a;
+	background-color: #ffffff;
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	--vana-green: #0b4a2c;
+	--vana-green-dark: #073820;
+	--vana-text: #173b2a;
+	--vana-muted: #66756c;
+	--vana-border: #e2e8e3;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	min-width: 320px;
+	min-height: 100vh;
+	margin: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
