@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 // Import the shared cart so the header always displays the real item count.
 import { useCart } from '../../context/CartContext'
 import { routePaths } from '../../lib/routePaths'
+import { useStore } from '../../context/StoreContext'
 
 // Define the structure of each navigation action.
 type AccountAction = {
@@ -34,11 +35,17 @@ const accountActions: AccountAction[] = [
 export function AccountActions() {
   // Read the number of individual products in the shared cart.
   const { itemCount } = useCart()
+  const { customer, wishlist } = useStore()
+  const actions = accountActions.map((action) =>
+    action.to === routePaths.account
+      ? { ...action, eyebrow: customer ? `Hello, ${customer.firstName}` : 'Hello, sign in' }
+      : { ...action, eyebrow: wishlist.length ? `${wishlist.length} saved` : action.eyebrow },
+  )
 
   return (
     <div className="flex items-center justify-end gap-3 sm:gap-5 xl:gap-7">
       {/* Render the account and wishlist navigation links. */}
-      {accountActions.map(({ icon: Icon, eyebrow, label, to }) => (
+      {actions.map(({ icon: Icon, eyebrow, label, to }) => (
         <Link
           aria-label={`${eyebrow}, ${label}`}
           className="flex min-w-0 items-center gap-2 text-[var(--vana-text)]"

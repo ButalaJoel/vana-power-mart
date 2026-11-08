@@ -1,4 +1,12 @@
 
+/**
+ * RevenueChart.tsx
+ *
+ * Displays a seven-day chart preview.
+ * IMPORTANT: The values below are sample data, not real revenue.
+ * Replace them with actual order/payment data when the API is ready.
+ */
+
 const revenueData = [
   { day: 'Mon', amount: 35 },
   { day: 'Tue', amount: 52 },
@@ -10,23 +18,30 @@ const revenueData = [
 ]
 
 export function RevenueChart() {
+  // Find the largest sample value to scale all bars proportionally.
   const maxAmount = Math.max(...revenueData.map((item) => item.amount))
 
   return (
     <section className="rounded-xl border border-[#D9E5DD] bg-white p-5">
+      {/* Chart title and preview indicator */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-[#17241C]">Revenue trend</h2>
+          <h2 className="font-semibold text-[#17241C]">
+            Revenue trend
+          </h2>
+
           <p className="mt-1 text-sm text-[#64756A]">
-            Weekly overview · illustrative data
+            Weekly overview · sample data
           </p>
         </div>
 
+        {/* Keep the existing seven-day period label */}
         <span className="rounded-lg border border-[#D9E5DD] px-3 py-2 text-sm text-[#064E32]">
           Last 7 days
         </span>
       </div>
 
+      {/* Render one proportional bar for each day */}
       <div className="mt-6 flex h-48 items-end gap-3">
         {revenueData.map((item) => (
           <div
@@ -35,7 +50,8 @@ export function RevenueChart() {
           >
             <div className="flex h-full w-full items-end">
               <div
-                title={`${item.amount} illustrative units`}
+                title={`${item.amount} sample units — not actual revenue`}
+                aria-label={`${item.day}: sample chart value ${item.amount}, not actual revenue`}
                 className="w-full rounded-t-md bg-[#0B6843] transition-opacity hover:opacity-75"
                 style={{
                   height: `${(item.amount / maxAmount) * 100}%`,
@@ -43,13 +59,17 @@ export function RevenueChart() {
               />
             </div>
 
-            <span className="text-xs text-[#64756A]">{item.day}</span>
+            <span className="text-xs text-[#64756A]">
+              {item.day}
+            </span>
           </div>
         ))}
       </div>
 
-      <p className="mt-4 text-xs text-[#64756A]">
-        Sample chart only. Actual UGX revenue will be shown when order data is connected.
+      {/* Clearly disclose that real revenue is not connected yet */}
+      <p className="mt-4 rounded-lg bg-[#F1F6F2] p-3 text-xs leading-relaxed text-[#64756A]">
+        Preview only — these figures are illustrative, not actual sales.
+        Real revenue in UGX will appear once order and payment data are connected.
       </p>
     </section>
   )

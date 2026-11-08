@@ -1,6 +1,9 @@
-
 {
   "rewrites": [
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://vana-power-mart-api.onrender.com/api/store/sitemap.xml"
+    },
     {
       "source": "/(.*)",
       "destination": "/"

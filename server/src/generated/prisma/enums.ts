@@ -32,3 +32,27 @@ export const PaymentStatus = {
 } as const
 
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
+
+
+export const ProcurementStatus = {
+  PENDING: 'PENDING',
+  REQUESTED: 'REQUESTED',
+  CONFIRMED: 'CONFIRMED',
+  UNAVAILABLE: 'UNAVAILABLE',
+  COLLECTED: 'COLLECTED',
+  SUPPLIER_DISPATCHED: 'SUPPLIER_DISPATCHED',
+  RECEIVED: 'RECEIVED'
+} as const
+
+export type ProcurementStatus = (typeof ProcurementStatus)[keyof typeof ProcurementStatus]
+
+
+export const ReturnStatus = {
+  REQUESTED: 'REQUESTED',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  RECEIVED: 'RECEIVED',
+  REFUNDED: 'REFUNDED'
+} as const
+
+export type ReturnStatus = (typeof ReturnStatus)[keyof typeof ReturnStatus]

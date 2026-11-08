@@ -36,3 +36,10 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Database dumps contain customer data: never commit them
+database-backups/
+*.dump
+
+# Full-size originals of the website images (not deployed)
+design-originals/

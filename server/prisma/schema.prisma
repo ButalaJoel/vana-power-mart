@@ -1,150 +1,252 @@
-
-// Generate a TypeScript Prisma Client for our Express backend.
+// Generate the TypeScript Prisma Client for the Express backend.
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
-// Tell Prisma that we are using PostgreSQL.
-// Connection URLs are configured in prisma.config.ts.
+// Database connection is configured in prisma.config.ts.
 datasource db {
   provider = "postgresql"
 }
 
-// Product categories such as Refrigerators, Furniture and Beddings.
+// Stores product categories and the specification fields each category uses.
 model Category {
-  id          String    @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
-  slug        String    @unique
+  slug        String  @unique
   description String?
   imageUrl    String?
-  isActive    Boolean   @default(true)
+  isActive    Boolean @default(true)
 
-  // A category can contain many products.
-  products    Product[]
+  // Defines dynamic fields for this category's product form.
+  // Example: [{"key":"material","label":"Material","type":"text","required":false}]
+  // These definitions let administrators add different specifications per category.
+  specificationFields Json?
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  // One level of subcategories. Top-level categories have no parent.
+  parentId String?
+  parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[] @relation("CategoryChildren")
+
+  // A category contains multiple products.
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-// Products displayed on the storefront and managed in the admin dashboard.
+// Shared information for a product, regardless of its variants.
 model Product {
-  id             String    @id @default(uuid())
-  name           String
-  slug           String    @unique
-  sku            String    @unique
-  description    String?
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  sku         String  @unique
+  description String?
 
-  // Use Decimal for prices to avoid floating-point rounding errors.
-  price          Decimal   @db.Decimal(12, 2)
-  compareAtPrice Decimal?  @db.Decimal(12, 2)
+  // Legacy product-level pricing retained for compatibility.
+  // New sellable variants have their own prices.
+  price          Decimal  @db.Decimal(12, 2)
+  compareAtPrice Decimal? @db.Decimal(12, 2)
 
-  // Store image URLs from cloud storage, not the image files themselves.
-  imageUrls      String[]  @default([])
+  // Stores image URLs returned by cloud storage after upload.
+  imageUrls String[] @default([])
 
-  // Optional product specifications, such as capacity or colour.
+  // General product specifications; field definitions live on Category.
   specifications Json?
 
-  isActive       Boolean   @default(true)
-  isFeatured     Boolean   @default(false)
+  isActive   Boolean @default(true)
+  isFeatured Boolean @default(false)
 
-  // Every product belongs to one category.
-  categoryId     String
-  category       Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  // Flash sale: salePrice applies only between saleStartsAt and saleEndsAt.
+  salePrice    Decimal?  @db.Decimal(12, 2)
+  saleStartsAt DateTime?
+  saleEndsAt   DateTime?
 
-  // Each product has one inventory record.
-  inventory      Inventory?
-  orderItems     OrderItem[]
+  // Every product belongs to a category.
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  // Existing product-level inventory and order relations retained for compatibility.
+  inventory  Inventory?
+  orderItems OrderItem[]
 
-  // Helps retrieve active products within a category.
+  // One product may have multiple sellable variants.
+  variants ProductVariant[]
+
+  supplierProducts SupplierProduct[]
+  stockMovements   StockMovement[]
+  reviews          Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([categoryId, isActive])
   @@index([isActive, isFeatured])
 }
 
-// Tracks stock levels independently from product descriptions and prices.
+// A sellable variant, such as a specific phone model, size or colour.
+model ProductVariant {
+  id String @id @default(uuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // SKU identifies this sellable variant and must be unique.
+  // modelNumber identifies the manufacturer's model separately.
+  sku         String  @unique
+  modelNumber String?
+  barcode     String? @unique
+
+  // Pricing can differ between variants of the same product.
+  price          Decimal  @db.Decimal(12, 2)
+  compareAtPrice Decimal? @db.Decimal(12, 2)
+
+  // Flexible variant options and variant-specific specifications.
+  // Examples: {"colour":"Black","storage":"256GB"}
+  options        Json?
+  specifications Json?
+
+  isActive Boolean @default(true)
+
+  // Each variant can have its own inventory and order lines.
+  inventory  Inventory?
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, isActive])
+}
+
+// Tracks stock and connects existing records to variants.
 model Inventory {
-  id                String   @id @default(uuid())
-  productId         String   @unique
-  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id String @id @default(uuid())
 
-  // Physical stock available at the business.
-  quantity          Int      @default(0)
+  // Retained during the transition to variant-level inventory.
+  productId String  @unique
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  // Stock temporarily set aside for pending orders.
-  reservedQuantity  Int      @default(0)
+  // Existing migration and backfill already added this relationship.
+  variantId String?         @unique
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
 
-  // Alert the admin when stock reaches this level.
-  reorderLevel      Int      @default(2)
+  quantity         Int @default(0)
+  reservedQuantity Int @default(0)
+  reorderLevel     Int @default(2)
 
-  updatedAt         DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
-// Customer records for orders and future customer accounts.
+// Stores customer details for orders.
 model Customer {
-  id          String   @id @default(uuid())
-  firstName   String
-  lastName    String
-  email       String?  @unique
-  phone       String   @unique
+  id        String  @id @default(uuid())
+  firstName String
+  lastName  String
+  email     String? @unique
+  phone     String  @unique
 
-  // We can add password hashes and account authentication later.
-  orders      Order[]
+  // Optional login. Guest checkout leaves passwordHash empty.
+  passwordHash String?
+  lastLoginAt  DateTime?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  orders         Order[]
+  returnRequests ReturnRequest[]
+  reviews        Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-// One customer can place many orders.
+// Stores order totals, delivery information and fulfilment status.
 model Order {
-  id              String      @id @default(uuid())
-  orderNumber     String      @unique
+  id          String @id @default(uuid())
+  orderNumber String @unique
 
-  customerId      String
-  customer        Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
-  status          OrderStatus @default(PENDING)
-  paymentStatus   PaymentStatus @default(UNPAID)
+  status        OrderStatus   @default(PENDING)
+  paymentStatus PaymentStatus @default(UNPAID)
 
-  subtotal        Decimal     @db.Decimal(12, 2)
-  deliveryFee     Decimal     @default(0) @db.Decimal(12, 2)
-  total            Decimal     @db.Decimal(12, 2)
-  currency         String      @default("UGX")
+  subtotal    Decimal @db.Decimal(12, 2)
+  deliveryFee Decimal @default(0) @db.Decimal(12, 2)
+  total       Decimal @db.Decimal(12, 2)
+  currency    String  @default("UGX")
 
-  // Preserve delivery details even if the customer later changes their profile.
+  // Snapshot delivery details for this particular order.
   deliveryAddress String
   deliveryArea    String?
   customerNotes   String?
 
-  items            OrderItem[]
+  // Contact details as entered for this order.
+  customerName  String?
+  customerPhone String?
+  customerEmail String?
 
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  // "delivery" or "collection"; "cash-on-delivery", "mobile-money" or "bank-transfer".
+  deliveryMethod String @default("delivery")
+  paymentMethod  String @default("cash-on-delivery")
+
+  deliveryZoneId String?
+  deliveryZone   DeliveryZone? @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+
+  discountAmount Decimal @default(0) @db.Decimal(12, 2)
+  voucherId      String?
+  voucher        Voucher? @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+
+  // Fulfilment: "VANA" rider/courier or "SUPPLIER" direct delivery.
+  fulfilledBy           String?
+  deliveryAssignee      String?
+  deliveryAssigneePhone String?
+  deliveryCost          Decimal?  @db.Decimal(12, 2)
+  dispatchedAt          DateTime?
+  deliveredAt           DateTime?
+  deliveryProof         String?
+
+  cancellationReason String?
+  internalNotes      String?
+
+  // Sent by the checkout page so a retried request cannot create a second order.
+  idempotencyKey String? @unique
+
+  items          OrderItem[]
+  statusHistory  OrderStatusHistory[]
+  payments       Payment[]
+  notifications  Notification[]
+  returnRequests ReturnRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, createdAt])
   @@index([customerId, createdAt])
 }
 
-// A snapshot of each product and its price when an order is placed.
+// Stores purchased product details for each order line.
 model OrderItem {
-  id             String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  orderId        String
-  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  productId      String
-  product        Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  // Retained for compatibility with existing product relationships.
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
-  quantity       Int
-  unitPrice      Decimal  @db.Decimal(12, 2)
-  productName    String
+  // Connects the order line to the selected variant when applicable.
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
 
-  createdAt      DateTime @default(now())
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(12, 2)
+  productName String
+
+  procurement Procurement?
+
+  createdAt DateTime @default(now())
 }
 
-// Track order progress.
+// Tracks order fulfilment separately from payment.
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -156,11 +258,321 @@ enum OrderStatus {
   CANCELLED
 }
 
-// Track payment separately from order fulfilment.
+// Tracks payment separately from fulfilment.
 enum PaymentStatus {
   UNPAID
   PENDING
   PAID
   FAILED
   REFUNDED
+}
+
+// Stores administrator accounts for the Vana Power Mart dashboard.
+model Admin {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("ADMIN")
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// ---------------------------------------------------------------------------
+// Suppliers and procurement
+// ---------------------------------------------------------------------------
+
+// A business Vana buys from. Suppliers keep the goods until an order arrives.
+model Supplier {
+  id            String  @id @default(uuid())
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  location      String?
+  notes         String?
+
+  // True when this supplier can deliver straight to Vana's customers.
+  deliversDirect Boolean @default(false)
+  leadTimeDays   Int?
+  isActive       Boolean @default(true)
+
+  products     SupplierProduct[]
+  procurements Procurement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// What a supplier has said about one of our products: price and stock on a date.
+model SupplierProduct {
+  id         String @id @default(uuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  supplierSku       String?
+  wholesalePrice    Decimal   @db.Decimal(12, 2)
+  availableQuantity Int       @default(0)
+  confirmedAt       DateTime?
+  leadTimeDays      Int?
+  isPreferred       Boolean   @default(false)
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([supplierId, productId])
+  @@index([productId])
+}
+
+// Every change to a product's sellable stock, with the reason and who made it.
+model StockMovement {
+  id            String  @id @default(uuid())
+  productId     String
+  product       Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  change        Int
+  quantityAfter Int
+  // ADJUSTMENT, ORDER, CANCELLATION, SUPPLIER_CONFIRMATION, RETURN, OPENING
+  reason        String
+  note          String?
+  orderId       String?
+  actor         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, createdAt])
+}
+
+enum ProcurementStatus {
+  PENDING
+  REQUESTED
+  CONFIRMED
+  UNAVAILABLE
+  COLLECTED
+  SUPPLIER_DISPATCHED
+  RECEIVED
+}
+
+// How one order line is being sourced from a supplier.
+model Procurement {
+  id          String    @id @default(uuid())
+  orderItemId String    @unique
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  // Agreed cost per unit from the supplier.
+  unitCost Decimal?          @db.Decimal(12, 2)
+  status   ProcurementStatus @default(PENDING)
+  notes    String?
+
+  confirmedAt DateTime?
+  receivedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([supplierId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Orders: history, delivery, payments, notifications
+// ---------------------------------------------------------------------------
+
+model OrderStatusHistory {
+  id            String         @id @default(uuid())
+  orderId       String
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status        OrderStatus
+  paymentStatus PaymentStatus?
+  note          String?
+  actor         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+// Delivery areas and their flat fees, managed in the admin.
+model DeliveryZone {
+  id            String  @id @default(uuid())
+  name          String  @unique
+  fee           Decimal @db.Decimal(12, 2)
+  estimatedTime String?
+  isActive      Boolean @default(true)
+  sortOrder     Int     @default(0)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// One payment attempt for an order (mobile money, card, cash or refund).
+model Payment {
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // "mobile-money", "cash", "bank-transfer", "refund"
+  method   String
+  provider String
+  amount   Decimal       @db.Decimal(12, 2)
+  currency String        @default("UGX")
+  status   PaymentStatus @default(PENDING)
+  phone    String?
+
+  // Our reference sent to the gateway, and the gateway's own reference.
+  merchantReference String  @unique
+  providerReference String? @unique
+  failureReason     String?
+  rawResponse       Json?
+  verifiedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status, createdAt])
+}
+
+// Every SMS or email sent (or skipped) about an order.
+model Notification {
+  id                String  @id @default(uuid())
+  orderId           String?
+  order             Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  channel           String
+  recipient         String
+  message           String
+  // SENT, FAILED or SKIPPED (provider not configured)
+  status            String
+  provider          String?
+  providerMessageId String?
+  error             String?
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Promotions, returns, reviews
+// ---------------------------------------------------------------------------
+
+model Voucher {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  description    String?
+  // "PERCENT" or "FIXED"
+  type           String
+  value          Decimal   @db.Decimal(12, 2)
+  minOrderAmount Decimal?  @db.Decimal(12, 2)
+  maxDiscount    Decimal?  @db.Decimal(12, 2)
+  usageLimit     Int?
+  usedCount      Int       @default(0)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  isActive       Boolean   @default(true)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  RECEIVED
+  REFUNDED
+}
+
+model ReturnRequest {
+  id           String       @id @default(uuid())
+  orderId      String
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  reason       String
+  details      String?
+  status       ReturnStatus @default(REQUESTED)
+  refundAmount Decimal?     @db.Decimal(12, 2)
+  refundMethod String?
+  adminNote    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([orderId])
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  rating     Int
+  title      String?
+  body       String?
+  // True when the customer has a delivered order containing this product.
+  isVerified Boolean  @default(false)
+  isVisible  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, customerId])
+  @@index([productId, isVisible])
+}
+
+// ---------------------------------------------------------------------------
+// Store settings and audit log
+// ---------------------------------------------------------------------------
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String  @id @default(uuid())
+  actor      String
+  action     String
+  entity     String
+  entityId   String?
+  details    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+// One-time codes sent by SMS to prove a customer owns a phone number
+// (account sign-up and password reset). Only a hash of the code is stored.
+model PhoneVerification {
+  id         String    @id @default(uuid())
+  phone      String
+  // REGISTER or RESET_PASSWORD
+  purpose    String
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, purpose, createdAt])
 }

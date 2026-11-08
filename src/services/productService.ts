@@ -1,109 +1,92 @@
+import { apiRequest } from '../lib/api'
+import type { ApiProduct, StoreProduct } from '../types/catalog'
 
-// Import the existing frontend product types.
-import type {
-  Product,
-  ProductCategory,
-} from "../data/products";
-
-// Use the backend URL from the environment when configured.
-// Fall back to the local Express API during development.
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:4000";
-
-// Describe the product data returned by our Express API.
-interface ApiProduct {
-  id: string;
-  name: string;
-  slug: string;
-  sku: string;
-  description: string | null;
-  price: string | number;
-  compareAtPrice: string | number | null;
-  imageUrls: string[];
-  specifications: Record<string, unknown> | null;
-  isFeatured: boolean;
-  category: {
-    name: string;
-    slug: string;
-  };
-  inventory: {
-    quantity: number;
-    reservedQuantity: number;
-  } | null;
+interface ProductsResponse {
+  success: boolean
+  data: ApiProduct[]
+  pagination: { page: number; limit: number; total: number; totalPages: number }
 }
 
-// Describe the complete API response.
-interface ProductsApiResponse {
-  success: boolean;
-  count: number;
-  data: ApiProduct[];
-}
+// Specification keys that hold the brand, in the order we check them.
+const BRAND_KEYS = ['brand', 'Brand']
 
-// Convert a database product into the format used by our existing UI.
-function mapApiProduct(item: ApiProduct): Product {
-  const validCategories: ProductCategory[] = [
-    "refrigerators",
-    "freezers",
-    "washing-machines",
-    "water-heaters",
-    "kitchen-appliances",
-    "furniture",
-  ];
+// Convert an API product into the storefront shape.
+// Pricing rule: the default (first active) variant's price is the price
+// customers pay; Product.price is the fallback for products without variants.
+export function toStoreProduct(item: ApiProduct): StoreProduct {
+  const variant = item.variants?.find((entry) => entry.isActive) ?? item.variants?.[0]
 
-  const category = validCategories.includes(
-    item.category.slug as ProductCategory,
-  )
-    ? (item.category.slug as ProductCategory)
-    : "furniture";
-
-  // Keep only specification values supported by our frontend type.
-  const specifications: Record<string, string | number | boolean> = {};
-
+  const specifications: Record<string, string | number | boolean> = {}
   for (const [key, value] of Object.entries(item.specifications ?? {})) {
     if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean"
+      (typeof value === 'string' && value.trim() !== '') ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
     ) {
-      specifications[key] = value;
+      specifications[key] = value
     }
   }
 
+  const brandKey = BRAND_KEYS.find((key) => typeof specifications[key] === 'string')
+  const basePrice = Number(variant?.price ?? item.price)
+  const sale = saleIsActive(item) && Number(item.salePrice) < basePrice
+  const price = sale ? Number(item.salePrice) : basePrice
+  // During a sale the regular price is shown crossed out.
+  const compareAt = sale
+    ? basePrice
+    : variant
+      ? variant.compareAtPrice
+      : item.compareAtPrice
+  const inventory = item.inventory ?? variant?.inventory ?? null
+
   return {
-    // Use the existing slug so product links and cart IDs stay compatible.
-    id: item.slug,
+    id: item.id,
+    slug: item.slug,
     name: item.name,
-    category,
-    model: item.sku,
-    price: Number(item.price),
+    sku: item.sku,
+    model: variant?.modelNumber ?? item.sku,
+    brand: brandKey ? String(specifications[brandKey]) : undefined,
+    categoryId: item.categoryId,
+    categorySlug: item.category?.slug ?? '',
+    categoryName: item.category?.name ?? 'General',
+    price,
     oldPrice:
-      item.compareAtPrice == null
-        ? undefined
-        : Number(item.compareAtPrice),
-    images: item.imageUrls,
+      compareAt != null && Number(compareAt) > price ? Number(compareAt) : undefined,
+    images: item.imageUrls ?? [],
     description: item.description ?? undefined,
-    shortDescription: item.description ?? undefined,
     specifications,
-    stock: item.inventory?.quantity ?? 0,
+    stock: inventory ? Math.max(0, inventory.quantity - inventory.reservedQuantity) : 0,
     featured: item.isFeatured,
-  };
+    variantId: variant?.id,
+    onSale: sale,
+    saleEndsAt: sale && item.saleEndsAt ? item.saleEndsAt : undefined,
+    rating: item.rating && item.rating.count > 0 ? item.rating : undefined,
+  }
 }
 
-// Fetch the products from our backend API.
-export async function fetchProducts(): Promise<Product[]> {
-  const response = await fetch(`${API_URL}/api/products`);
+// Same rule as the server (server/src/lib/pricing.ts): a sale runs while
+// now is between its start (if any) and end (if any).
+export function saleIsActive(item: Pick<ApiProduct, 'salePrice' | 'saleStartsAt' | 'saleEndsAt'>, now = Date.now()) {
+  if (item.salePrice === null || item.salePrice === undefined) return false
+  if (item.saleStartsAt && Date.parse(item.saleStartsAt) > now) return false
+  if (item.saleEndsAt && Date.parse(item.saleEndsAt) <= now) return false
+  return true
+}
 
-  if (!response.ok) {
-    throw new Error(
-      `Unable to fetch products. Server returned ${response.status}.`,
-    );
-  }
+// Load the active storefront catalogue, page by page (the API caps a page at 100).
+export async function fetchProducts(): Promise<StoreProduct[]> {
+  const all: ApiProduct[] = []
+  let page = 1
+  let totalPages = 1
 
-  const result: ProductsApiResponse = await response.json();
+  do {
+    const result = await apiRequest<ProductsResponse>(
+      `/api/products?limit=100&page=${page}`,
+    )
+    all.push(...result.data)
+    totalPages = result.pagination?.totalPages ?? 1
+    page++
+  } while (page <= totalPages && page <= 20)
 
-  if (!result.success || !Array.isArray(result.data)) {
-    throw new Error("The products API returned an invalid response.");
-  }
-
-  return result.data.map(mapApiProduct);
+  return all.map(toStoreProduct)
 }

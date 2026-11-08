@@ -1,7 +1,7 @@
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Product } from '../../data/products'
+import type { StoreProduct as Product } from '../../types/catalog'
 import { useCart } from '../../context/CartContext'
 
 interface ProductGridProps {
@@ -57,25 +57,30 @@ export function ProductGrid({ products, title }: ProductGridProps) {
               >
                 <div className="flex h-56 items-center justify-center bg-[#f4f7f5] p-4">
                   <Link
-                    to={`/products/${product.id}`}
+                    to={`/products/${product.slug}`}
                     className="flex h-full w-full items-center justify-center"
                   >
-                    <img
-                      src={product.images[0]}
-                      alt={product.name}
-                      className="h-full w-full object-contain"
-                    />
+                    {product.images[0] ? (
+                      <img
+                        src={product.images[0]}
+                        alt={product.name}
+                        loading="lazy"
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-xs text-[#718078]">No image yet</span>
+                    )}
                   </Link>
                 </div>
 
                 <div className="flex flex-1 flex-col p-4">
                   <p className="mb-2 text-xs text-[#718078]">
-                    {product.category}
+                    {product.categoryName}
                   </p>
 
                   <h3 className="line-clamp-2 min-h-[40px] text-sm font-medium leading-5 text-[#10231b]">
                     <Link
-                      to={`/products/${product.id}`}
+                      to={`/products/${product.slug}`}
                       className="hover:text-[var(--vana-green)]"
                     >
                       {product.name}
@@ -89,9 +94,17 @@ export function ProductGrid({ products, title }: ProductGridProps) {
                   )}
 
                   <div className="mt-auto pt-5">
-                    {product.price !== undefined && (
-                      <p className="text-base font-bold text-[var(--vana-green)]">
-                        UGX {product.price.toLocaleString()}
+                    {product.onSale && (
+                      <span className="mb-1 inline-block rounded bg-[#c2410c] px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                        Flash sale
+                      </span>
+                    )}
+                    <p className="text-base font-bold text-[var(--vana-green)]">
+                      UGX {product.price.toLocaleString('en-UG')}
+                    </p>
+                    {product.oldPrice && (
+                      <p className="text-xs text-gray-400 line-through">
+                        UGX {product.oldPrice.toLocaleString('en-UG')}
                       </p>
                     )}
 
@@ -111,6 +124,29 @@ export function ProductGrid({ products, title }: ProductGridProps) {
               </article>
             )
           })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// Grey placeholder cards shown while products load.
+export function ProductGridSkeleton({ count = 10 }: { count?: number }) {
+  return (
+    <section className="px-4 py-12 sm:px-6 lg:px-10" aria-busy="true" aria-label="Loading products">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 h-8 w-56 animate-pulse rounded bg-[#eef2ef]" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: count }).map((_, index) => (
+            <div key={index} className="animate-pulse overflow-hidden rounded-xl border border-[#e1e7e2]">
+              <div className="aspect-square bg-[#f0f3f1]" />
+              <div className="space-y-2 p-3">
+                <div className="h-3 w-4/5 rounded bg-[#eef2ef]" />
+                <div className="h-3 w-1/2 rounded bg-[#eef2ef]" />
+                <div className="h-8 rounded-full bg-[#eef2ef]" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </section>

@@ -1,22 +1,24 @@
 import { Link } from 'react-router-dom'
 import { routePaths } from '../../lib/routePaths'
-
-const shopLinks = [
-  { label: 'Home Appliances', to: '/categories/home-appliances' },
-  { label: 'Phones & Electronics', to: '/categories/phones-electronics' },
-  { label: 'Furniture & Home', to: '/categories/furniture-home' },
-  { label: 'Beddings', to: '/categories/beddings' },
-  { label: 'Bags & Accessories', to: '/categories/bags-accessories' },
-]
+import { useCategories } from '../../context/CategoryContext'
+import { useStore } from '../../context/StoreContext'
 
 const customerLinks = [
   { label: 'My account', to: routePaths.account },
+  { label: 'Track my order', to: '/track' },
   { label: 'My orders', to: routePaths.accountOrders },
   { label: 'Wishlist', to: routePaths.wishlist },
   { label: 'Contact us', to: routePaths.contact },
 ]
 
 export function StoreFooter() {
+  const { categories } = useCategories()
+  const { config } = useStore()
+  const shopLinks = categories
+    .filter((category) => !category.parentId)
+    .slice(0, 8)
+    .map((category) => ({ label: category.name, to: `/categories/${category.slug}` }))
+
   return (
     <footer className="mt-16 bg-[var(--vana-green-dark)] text-white">
       <div className="mx-auto w-full max-w-[1440px] px-6 py-12 sm:px-8 lg:px-10 lg:py-16">
@@ -38,6 +40,7 @@ export function StoreFooter() {
             <p className="mt-5 text-sm font-medium text-white/90">
               Kampala, Uganda
             </p>
+
           </div>
 
           <div>
@@ -84,9 +87,16 @@ export function StoreFooter() {
             </h2>
 
             <div className="mt-4 space-y-3 text-sm text-white/70">
-              <p>+256 700 123 456</p>
-              <p>Mon – Sat: 8:00 AM – 6:00 PM</p>
-              <p>Sunday: 10:00 AM – 4:00 PM</p>
+              {config?.storePhone ? (
+                <p>
+                  <a href={`tel:${config.storePhone}`} className="hover:text-white">{config.storePhone}</a>
+                </p>
+              ) : (
+                <p>Call us using the number in your order SMS.</p>
+              )}
+              <p>
+                <Link to="/track" className="hover:text-white">Track your order</Link>
+              </p>
             </div>
           </div>
         </div>

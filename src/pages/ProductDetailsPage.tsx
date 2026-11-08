@@ -2,21 +2,48 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
-import { products } from '../data/products'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useCart } from '../context/CartContext'
+import { useProducts } from '../context/ProductContext'
+import { useStore } from '../context/StoreContext'
+import { Heart } from 'lucide-react'
+import { SaleCountdown } from '../components/store/SaleCountdown'
+import { ProductReviews, Stars } from '../components/store/ProductReviews'
 
 export function ProductDetailsPage() {
   const { productId } = useParams()
   const { addItem } = useCart()
+  const { isWishlisted, toggleWishlist } = useStore()
+  const { findProduct, loading } = useProducts()
 
-  const product = products.find((item) => item.id === productId)
+  // The route parameter is the product slug (older links may use the id).
+  const product = findProduct(productId)
 
   const [activeImage, setActiveImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [addedToCart, setAddedToCart] = useState(false)
 
-  usePageTitle(product?.name ?? 'Product not found')
+  usePageTitle(
+    product?.name ?? (loading ? 'Loading product' : 'Product not found'),
+    product
+      ? `${product.name}${product.description ? ` - ${product.description}` : ''}. Buy online at Vana Power Mart with delivery across Uganda.`
+      : undefined,
+  )
+
+  if (!product && loading) {
+    return (
+      <main className="min-h-[50vh] bg-[#f5f6f5] px-4 py-12">
+        <div className="mx-auto grid max-w-7xl animate-pulse gap-6 rounded-xl bg-white p-6 lg:grid-cols-2">
+          <div className="h-[300px] rounded-xl bg-[#f0f3f1]" />
+          <div className="space-y-4">
+            <div className="h-4 w-1/4 rounded bg-gray-200" />
+            <div className="h-8 w-3/4 rounded bg-gray-200" />
+            <div className="h-10 w-1/3 rounded bg-gray-200" />
+          </div>
+        </div>
+      </main>
+    )
+  }
 
   if (!product) {
     return (
@@ -76,10 +103,10 @@ export function ProductDetailsPage() {
           <span>/</span>
 
           <Link
-            to={`/products?category=${product.category}`}
+            to={`/categories/${product.categorySlug}`}
             className="hover:text-[var(--vana-green)]"
           >
-            {product.category.replaceAll('-', ' ')}
+            {product.categoryName}
           </Link>
 
           <span>/</span>
@@ -141,9 +168,27 @@ export function ProductDetailsPage() {
                 {product.brand ?? 'Vana Power Mart'}
               </p>
 
-              <h1 className="mt-2 text-2xl font-bold leading-tight text-[#10231b] sm:text-3xl">
-                {product.name}
-              </h1>
+              <div className="mt-2 flex items-start justify-between gap-3">
+                <h1 className="text-2xl font-bold leading-tight text-[#10231b] sm:text-3xl">
+                  {product.name}
+                </h1>
+                <button
+                  type="button"
+                  onClick={() => toggleWishlist(product.id)}
+                  aria-pressed={isWishlisted(product.id)}
+                  aria-label={isWishlisted(product.id) ? 'Remove from wishlist' : 'Save to wishlist'}
+                  className="shrink-0 rounded-full border border-[#dce5df] p-2.5 text-[#c2410c] hover:bg-[#fff4ee]"
+                >
+                  <Heart size={20} fill={isWishlisted(product.id) ? 'currentColor' : 'none'} />
+                </button>
+              </div>
+
+              {product.rating && (
+                <a href="#reviews" className="mt-2 flex items-center gap-2 text-sm text-gray-600 hover:underline">
+                  <Stars value={product.rating.average} size={15} />
+                  {product.rating.average} ({product.rating.count} review{product.rating.count === 1 ? '' : 's'})
+                </a>
+              )}
 
               {product.model && (
                 <p className="mt-3 text-sm text-gray-500">
@@ -151,36 +196,36 @@ export function ProductDetailsPage() {
                 </p>
               )}
 
-              {product.rating !== undefined && (
-                <div className="mt-3 flex items-center gap-2 text-sm">
-                  <span className="text-amber-500">
-                    {'★'.repeat(Math.round(product.rating))}
-                  </span>
-
-                  <span className="text-gray-500">
-                    {product.rating}/5
-                    {product.reviewCount !== undefined &&
-                      ` (${product.reviewCount} reviews)`}
-                  </span>
-                </div>
-              )}
 
               <div className="my-5 border-y border-[#e8ece9] py-5">
-                {product.price !== undefined ? (
-                  <p className="text-3xl font-bold text-[var(--vana-green)]">
-                    {formatPrice(product.price)}
+                {product.onSale && (
+                  <p className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-[#c2410c] px-3 py-2 text-sm font-semibold text-white">
+                    Flash sale
+                    {product.oldPrice ? ` · ${Math.round((1 - product.price / product.oldPrice) * 100)}% off` : ''}
+                    {product.saleEndsAt && <SaleCountdown endsAt={product.saleEndsAt} className="ml-auto font-normal" />}
                   </p>
-                ) : (
-                  <p className="font-semibold text-gray-600">
-                    Contact us for the current price
+                )}
+                <p className="text-3xl font-bold text-[var(--vana-green)]">
+                  {formatPrice(product.price)}
+                </p>
+
+                {product.oldPrice && (
+                  <p className="mt-1 text-sm text-gray-400 line-through">
+                    {formatPrice(product.oldPrice)}
                   </p>
                 )}
 
-                {product.shortDescription && (
-                  <p className="mt-4 text-sm leading-6 text-gray-600">
-                    {product.shortDescription}
-                  </p>
-                )}
+                <p
+                  className={`mt-3 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                    product.stock > 0
+                      ? 'bg-[#eaf3ed] text-[var(--vana-green)]'
+                      : 'bg-amber-50 text-amber-700'
+                  }`}
+                >
+                  {product.stock > 0
+                    ? 'In stock'
+                    : 'Available to order — we confirm stock before delivery'}
+                </p>
               </div>
 
               {product.model && (
@@ -222,8 +267,9 @@ export function ProductDetailsPage() {
                   <button
                     type="button"
                     aria-label="Increase quantity"
+                    disabled={quantity >= 100}
                     onClick={() => {
-                      setQuantity((current) => current + 1)
+                      setQuantity((current) => Math.min(100, current + 1))
                       setAddedToCart(false)
                     }}
                     className="h-11 w-12 rounded-r-lg border border-[#dce5df] text-lg hover:bg-[#f4f7f5]"
@@ -236,7 +282,6 @@ export function ProductDetailsPage() {
               <button
                 type="button"
                 onClick={handleAddToCart}
-                disabled={product.price === undefined}
                 className="mt-5 w-full rounded-full bg-[var(--vana-green)] px-6 py-3.5 font-semibold text-white transition-colors hover:bg-[var(--vana-green-dark)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {addedToCart ? 'Add to cart again' : 'Add to cart'}
@@ -322,7 +367,6 @@ export function ProductDetailsPage() {
 
               <p className="mt-4 whitespace-pre-line text-sm leading-7 text-gray-600">
                 {product.description ??
-                  product.shortDescription ??
                   'Product information will be added soon.'}
               </p>
             </section>
@@ -402,6 +446,9 @@ export function ProductDetailsPage() {
             </a>
           </aside>
         </div>
+      </div>
+      <div id="reviews">
+        <ProductReviews productSlug={product.slug} />
       </div>
     </main>
   )

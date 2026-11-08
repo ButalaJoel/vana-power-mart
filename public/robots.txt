@@ -1,0 +1,13 @@
+# Vana Power Mart
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /cart
+Disallow: /checkout
+Disallow: /payment/
+Disallow: /order-confirmation/
+Disallow: /account
+Disallow: /track
+
+# Once the site is live, add the line below with your domain:
+# Sitemap: https://YOUR-DOMAIN/sitemap.xml

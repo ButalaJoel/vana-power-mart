@@ -11,6 +11,7 @@ export function CartPage() {
     subtotal,
     updateQuantity,
     removeItem,
+    loading,
   } = useCart()
 
   usePageTitle('Shopping Cart')
@@ -51,7 +52,11 @@ export function CartPage() {
           </div>
         </div>
 
-        {items.length === 0 ? (
+        {loading && items.length === 0 ? (
+          <p className="rounded-2xl border border-[#e1e7e2] bg-white px-5 py-16 text-center text-sm text-gray-500">
+            Loading your cart…
+          </p>
+        ) : items.length === 0 ? (
           <section className="rounded-2xl border border-[#e1e7e2] bg-white px-5 py-16 text-center sm:px-10">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#eaf3ed] text-[var(--vana-green)]">
               <svg
@@ -100,7 +105,7 @@ export function CartPage() {
                     className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-6"
                   >
                     <Link
-                      to={`/products/${product.id}`}
+                      to={`/products/${product.slug}`}
                       className="flex h-32 w-full shrink-0 items-center justify-center rounded-xl bg-[#f4f7f5] p-3 sm:w-36"
                     >
                       {product.images?.[0] ? (
@@ -122,7 +127,7 @@ export function CartPage() {
                       </p>
 
                       <Link
-                        to={`/products/${product.id}`}
+                        to={`/products/${product.slug}`}
                         className="mt-1 block font-bold leading-6 text-[#10231b] hover:text-[var(--vana-green)]"
                       >
                         {product.name}
@@ -136,7 +141,7 @@ export function CartPage() {
 
                       <p className="mt-2 text-sm text-gray-600">
                         Unit price:{' '}
-                        {product.price !== undefined
+                        {product.price > 0
                           ? formatPrice(product.price)
                           : 'Price unavailable'}
                       </p>
@@ -220,7 +225,7 @@ export function CartPage() {
                 <div className="flex items-start justify-between gap-4">
                   <span className="text-gray-600">Delivery</span>
                   <span className="text-right text-gray-500">
-                    Calculated at checkout
+                    Confirmed after you order
                   </span>
                 </div>
 

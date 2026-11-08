@@ -1,6 +1,6 @@
 
-import { useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -13,18 +13,32 @@ import {
   Search,
   Menu,
   X,
-  Bell,
-  ChevronDown,
+  Tags,
+  LogOut,
+  Factory,
+  BadgePercent,
+  Undo2,
 } from 'lucide-react'
+import {
+  ADMIN_LOGOUT_EVENT,
+  apiRequest,
+  getAdminToken,
+  setAdminToken,
+} from '../lib/api'
+import { AdminLoginPage, type AdminProfile } from '../pages/admin/AdminLoginPage'
 
 // Keep all sidebar links in one place so desktop and mobile stay consistent.
 const navigation = [
   { label: 'Overview', path: '/admin', icon: LayoutDashboard },
   { label: 'Orders', path: '/admin/orders', icon: ShoppingCart },
   { label: 'Products', path: '/admin/products', icon: Package },
-  { label: 'Inventory & Procurement', path: '/admin/inventory', icon: Boxes },
+  { label: 'Categories', path: '/admin/categories', icon: Tags },
+  { label: 'Inventory', path: '/admin/inventory', icon: Boxes },
+  { label: 'Suppliers', path: '/admin/suppliers', icon: Factory },
   { label: 'Delivery', path: '/admin/delivery', icon: Truck },
+  { label: 'Promotions', path: '/admin/promotions', icon: BadgePercent },
   { label: 'Customers', path: '/admin/customers', icon: Users },
+  { label: 'Returns', path: '/admin/returns', icon: Undo2 },
   { label: 'Reports', path: '/admin/reports', icon: ChartNoAxesCombined },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
 ]
@@ -34,6 +48,40 @@ export function AdminLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const location = useLocation()
+  const navigate = useNavigate()
+
+  // Admin session: verified with /api/auth/me whenever a token is present.
+  const [admin, setAdmin] = useState<AdminProfile | null>(null)
+  const [checkingSession, setCheckingSession] = useState(() => Boolean(getAdminToken()))
+  const [sessionNotice, setSessionNotice] = useState('')
+
+  useEffect(() => {
+    if (!getAdminToken()) return
+
+    apiRequest<{ admin: AdminProfile }>('/api/auth/me', { auth: true })
+      .then((result) => setAdmin(result.admin))
+      .catch(() => setAdmin(null))
+      .finally(() => setCheckingSession(false))
+  }, [])
+
+  // Any request that finds the session expired logs the admin out.
+  useEffect(() => {
+    function handleLogout() {
+      setAdmin((current) => {
+        if (current) setSessionNotice('Your session has ended. Please sign in again.')
+        return null
+      })
+    }
+
+    window.addEventListener(ADMIN_LOGOUT_EVENT, handleLogout)
+    return () => window.removeEventListener(ADMIN_LOGOUT_EVENT, handleLogout)
+  }, [])
+
+  function logout() {
+    setSessionNotice('')
+    setAdminToken(null)
+    setAdmin(null)
+  }
 
   // Close the mobile sidebar when the user selects a page.
   function closeMenu() {
@@ -48,6 +96,28 @@ export function AdminLayout() {
         : 'border-transparent text-white/90 hover:border-white hover:bg-transparent hover:text-white'
     }`
   }
+
+  if (checkingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F5F8F6] text-sm text-[#64756A]">
+        Checking your session…
+      </div>
+    )
+  }
+
+  if (!admin) {
+    return (
+      <AdminLoginPage
+        notice={sessionNotice}
+        onLogin={(profile) => {
+          setSessionNotice('')
+          setAdmin(profile)
+        }}
+      />
+    )
+  }
+
+  const initial = admin.name.charAt(0).toUpperCase() || 'A'
 
   return (
     <div className="min-h-screen bg-[#F5F8F6] text-[#17241C]">
@@ -87,13 +157,21 @@ export function AdminLayout() {
           <div className="border-t border-white/15 p-4">
             <div className="flex items-center gap-3 rounded-xl bg-white/10 p-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-[#064E32]">
-                A
+                {initial}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">Store Admin</p>
-                <p className="text-xs text-white/70">Administrator</p>
+                <p className="truncate text-sm font-semibold">{admin.name}</p>
+                <p className="truncate text-xs text-white/70">{admin.email}</p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="mt-3 flex w-full items-center gap-2 rounded-full border border-white/30 px-4 py-2 text-sm text-white/90 transition hover:border-white hover:text-white"
+            >
+              <LogOut size={16} aria-hidden="true" />
+              Log out
+            </button>
             <p className="mt-3 px-2 text-xs text-white/60">
               Vana Power Mart · Admin
             </p>
@@ -162,13 +240,21 @@ export function AdminLayout() {
           <div className="border-t border-white/15 p-4">
             <div className="flex items-center gap-3 rounded-xl bg-white/10 p-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white font-bold text-[#064E32]">
-                A
+                {initial}
               </div>
-              <div>
-                <p className="text-sm font-semibold">Store Admin</p>
-                <p className="text-xs text-white/70">Administrator</p>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{admin.name}</p>
+                <p className="truncate text-xs text-white/70">{admin.email}</p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="mt-3 flex w-full items-center gap-2 rounded-full border border-white/30 px-4 py-2 text-sm text-white/90 transition hover:border-white hover:text-white"
+            >
+              <LogOut size={16} aria-hidden="true" />
+              Log out
+            </button>
           </div>
         </aside>
 
@@ -197,10 +283,12 @@ export function AdminLayout() {
 
                   const query = searchQuery.trim()
 
-                  if (query) {
-                    // Actual search will be connected after the admin pages are built.
-                    console.info('Admin search requested:', query)
-                  }
+                  // The header search looks up orders (number, name, phone, email).
+                  navigate(
+                    query
+                      ? `/admin/orders?search=${encodeURIComponent(query)}`
+                      : '/admin/orders',
+                  )
                 }}
                 className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full border border-[#064E32] bg-white px-3 shadow-sm transition focus-within:ring-2 focus-within:ring-[#064E32]/15 sm:px-4 lg:max-w-2xl"
               >
@@ -214,7 +302,7 @@ export function AdminLayout() {
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search products, orders, customers..."
+                  placeholder="Search orders by number, name or phone..."
                   aria-label="Search the admin workspace"
                   className="min-w-0 flex-1 bg-transparent text-sm text-[#17241C] outline-none placeholder:text-[#829087]"
                 />
@@ -228,31 +316,16 @@ export function AdminLayout() {
                 </button>
               </form>
 
-              {/* Compact notification control for all screen sizes. */}
               <button
                 type="button"
-                aria-label="Notifications"
-                title="Notifications"
-                className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#064E32] transition hover:bg-[#EAF2EC]"
-              >
-                <Bell size={20} />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-amber-500" />
-              </button>
-
-              {/* Account control is simplified on smaller screens. */}
-              <button
-                type="button"
+                onClick={logout}
                 className="hidden items-center gap-2 rounded-full border border-[#D9E5DD] p-1.5 pr-3 transition hover:bg-[#F5F8F6] sm:flex"
-                aria-label="Admin account"
-                title="Admin account"
+                title={`Signed in as ${admin.email}`}
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF2EC] text-sm font-semibold text-[#064E32]">
-                  A
+                  {initial}
                 </span>
-                <span className="hidden text-sm font-medium md:inline">
-                  Admin
-                </span>
-                <ChevronDown size={15} className="text-[#64756A]" />
+                <span className="text-sm font-medium">Log out</span>
               </button>
             </div>
 
@@ -262,8 +335,8 @@ export function AdminLayout() {
                 Vana Power Mart / Management
                 {location.pathname !== '/admin' &&
                   ` / ${
-                    navigation.find(
-                      (item) => item.path === location.pathname,
+                    navigation.find((item) =>
+                      location.pathname.startsWith(item.path) && item.path !== '/admin',
                     )?.label ?? 'Section'
                   }`}
               </p>

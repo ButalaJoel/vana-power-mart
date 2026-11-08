@@ -1,15 +1,11 @@
 import { NavLink } from 'react-router-dom'
 import { routePaths } from '../../lib/routePaths'
-
-const categories = [
-  { label: 'Home Appliances', slug: 'home-appliances' },
-  { label: 'Phones & Electronics', slug: 'phones-electronics' },
-  { label: 'Furniture & Home', slug: 'furniture-home' },
-  { label: 'Beddings', slug: 'beddings' },
-  { label: 'Bags & Accessories', slug: 'bags-accessories' },
-]
+import { useCategories } from '../../context/CategoryContext'
 
 export function CategoryNavigation() {
+  // Active categories come from the database, so new ones appear automatically.
+  const { categories, loading } = useCategories()
+
   return (
     <nav
       aria-label="Shop categories"
@@ -31,7 +27,16 @@ export function CategoryNavigation() {
         </NavLink>
 
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:gap-3">
-          {categories.map(({ label, slug }) => (
+          {loading &&
+            Array.from({ length: 4 }).map((_, index) => (
+              <span
+                key={index}
+                aria-hidden="true"
+                className="h-8 w-28 shrink-0 animate-pulse rounded-full bg-[#eef2ef]"
+              />
+            ))}
+
+          {categories.filter((category) => !category.parentId).map(({ name: label, slug }) => (
             <NavLink
               key={slug}
               to={`/categories/${slug}`}
